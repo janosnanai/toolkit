@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -118,13 +119,21 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) (
 				uploadedFile.OriginalFileName = hdr.Filename
 
 				var outfile *os.File
-				defer outfile.Close()
+				if runtime.GOOS != "windows" {
+					defer outfile.Close() // can defer normally if we are not on windows
+				}
 
 				if outfile, err = os.Create(filepath.Join(uploadDir, uploadedFile.NewFileName)); err != nil {
+					if runtime.GOOS == "windows" {
+						outfile.Close() // fuck windows
+					}
 					return nil, err
 				} else {
 					fileSize, err := io.Copy(outfile, infile)
 					if err != nil {
+						if runtime.GOOS == "windows" {
+							outfile.Close() // fuck windows
+						}
 						return nil, err
 					}
 					uploadedFile.FileSize = fileSize
@@ -132,6 +141,9 @@ func (t *Tools) UploadFiles(r *http.Request, uploadDir string, rename ...bool) (
 
 				uploadedFiles = append(uploadedFiles, &uploadedFile)
 
+				if runtime.GOOS == "windows" {
+					outfile.Close() // fuck windows
+				}
 				return uploadedFiles, nil
 			}(uploadedFiles)
 			if err != nil {
